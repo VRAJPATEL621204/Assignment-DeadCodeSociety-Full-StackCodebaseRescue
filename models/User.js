@@ -1,24 +1,40 @@
-var mongoose = require('mongoose');
+/**
+ * User model
+ * @module models/User
+ */
 
-var Schema = mongoose.Schema;
+const mongoose = require('mongoose');
 
-var userSchema = new Schema({
+const { Schema } = mongoose;
+
+/**
+ * User schema definition
+ * @constant {mongoose.Schema}
+ */
+const userSchema = new Schema({
     name: {
         type: String,
-        required: true
+        required: [true, 'Name is required'],
+        trim: true,
+        minlength: [2, 'Name must be at least 2 characters']
     },
     email: {
         type: String,
-        required: true,
-        unique: true
+        required: [true, 'Email is required'],
+        unique: true,
+        lowercase: true,
+        trim: true
     },
     password: {
-        type: String, // using md5 for now, easy to test
-        required: true
+        type: String,
+        required: [true, 'Password is required'],
+        minlength: [8, 'Password must be at least 8 characters'],
+        select: false // Don't return password by default
     },
     role: {
         type: String,
-        default: 'user' // either 'user' or 'admin'
+        enum: ['user', 'admin'],
+        default: 'user'
     },
     createdAt: {
         type: Date,
@@ -26,4 +42,10 @@ var userSchema = new Schema({
     }
 });
 
-module.exports = mongoose.model('User', userSchema);
+/**
+ * User model
+ * @type {mongoose.Model}
+ */
+const User = mongoose.model('User', userSchema);
+
+module.exports = User;

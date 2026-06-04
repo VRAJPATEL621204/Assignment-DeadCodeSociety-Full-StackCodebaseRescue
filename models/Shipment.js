@@ -1,36 +1,57 @@
-var mongoose = require('mongoose');
+/**
+ * Shipment model
+ * @module models/Shipment
+ */
 
-var shipmentSchema = new mongoose.Schema({
+const mongoose = require('mongoose');
+
+/**
+ * Shipment status values
+ * @constant {string[]}
+ */
+const STATUS_VALUES = ['pending', 'in-progress', 'delivered', 'cancelled'];
+
+/**
+ * Shipment schema definition
+ * @constant {mongoose.Schema}
+ */
+const shipmentSchema = new mongoose.Schema({
     trackingId: {
         type: String,
-        required: true,
-        unique: true
+        required: [true, 'Tracking ID is required'],
+        unique: true,
+        index: true
     },
     origin: {
         type: String,
-        required: true
+        required: [true, 'Origin is required'],
+        trim: true
     },
     destination: {
         type: String,
-        required: true
+        required: [true, 'Destination is required'],
+        trim: true
     },
     status: {
         type: String,
-        default: 'pending' // pending, in-progress, delivered, cancelled
+        enum: STATUS_VALUES,
+        default: 'pending'
     },
     weight: {
         type: Number,
-        required: true
+        required: [true, 'Weight is required'],
+        min: [0, 'Weight must be positive']
     },
     carrier: {
         type: String,
-        required: true
+        required: [true, 'Carrier is required'],
+        trim: true
     },
-    // which user this shipment belongs to
     userId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',
-        required: true
+        required: [true, 'User ID is required'],
+        index: true
     },
     createdAt: {
         type: Date,
@@ -42,10 +63,19 @@ var shipmentSchema = new mongoose.Schema({
     }
 });
 
-// hook for pre-save on model
+/**
+ * Pre-save hook to update the updatedAt timestamp
+ * @param {Function} next - Mongoose next middleware function
+ */
 shipmentSchema.pre('save', function(next) {
     this.updatedAt = Date.now();
     next();
 });
 
-module.exports = mongoose.model('Shipment', shipmentSchema);
+/**
+ * Shipment model
+ * @type {mongoose.Model}
+ */
+const Shipment = mongoose.model('Shipment', shipmentSchema);
+
+module.exports = Shipment;

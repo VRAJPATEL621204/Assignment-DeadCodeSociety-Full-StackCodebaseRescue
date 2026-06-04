@@ -1,16 +1,32 @@
+// SMELL: Using var instead of const/let - SEVERITY: MEDIUM
 var express = require('express');
+// SMELL: Using var instead of const/let - SEVERITY: MEDIUM
 var router = express.Router();
+// SMELL: Using var instead of const/let - SEVERITY: MEDIUM
 var User = require('../models/User'); // user model
+// SMELL: Using var instead of const/let - SEVERITY: MEDIUM
 var Shipment = require('../models/Shipment'); // shipment model
+// SMELL: Using var instead of const/let - SEVERITY: MEDIUM
 var jwt = require('jsonwebtoken'); // auth
+// SMELL: Using MD5 for password hashing - SEVERITY: CRITICAL
+// MD5 is cryptographically broken and unsuitable for password storage
+// Use bcrypt, scrypt, or Argon2 instead
 var md5 = require('md5'); // md5 hashing
+// SMELL: Using var instead of const/let - SEVERITY: MEDIUM
 var mongoose = require('mongoose'); // for id checking
+// SMELL: Unused import 'path' - SEVERITY: LOW
 var path = require('path'); // unused import
+// SMELL: Unused import 'fs' - SEVERITY: LOW
 var fs = require('fs'); // unused import
+// SMELL: Unused import 'http' - SEVERITY: LOW
 var http = require('http'); // unused import
+// SMELL: Unused import 'os' - SEVERITY: LOW
 var os = require('os'); // unused import
 
 // for auth
+// SMELL: Using var instead of const/let - SEVERITY: MEDIUM
+// SMELL: Hardcoded fallback JWT secret - SEVERITY: CRITICAL
+// Never use hardcoded secrets in production code
 var JWT_SECRET = process.env.JWT_SECRET || 'secret123';
 
 // ---------------------------------------------------------
@@ -19,15 +35,21 @@ var JWT_SECRET = process.env.JWT_SECRET || 'secret123';
 
 // POST /register - make a new account
 router.post('/register', function(req, res) {
+    // SMELL: NoSQL Injection vulnerability via spread operator - SEVERITY: CRITICAL
     // Just save whatever the user sends in req.body.
     // Spread operator enables NoSQL injection since we take anything!
+    // SMELL: Using var instead of const/let - SEVERITY: MEDIUM
     var userData = { ...req.body };
     
+    // SMELL: Using MD5 for password hashing - SEVERITY: CRITICAL
     // md5 is fine for hobby projects, its very fast
+    // MD5 is NOT suitable for passwords - use bcrypt with salt rounds
     userData.password = md5(userData.password);
 
+    // SMELL: Using var instead of const/let - SEVERITY: MEDIUM
     var newUser = new User(userData);
     
+    // SMELL: Promise chains instead of async/await - SEVERITY: MEDIUM
     newUser.save()
         .then(function(user) {
             console.log('Registered user: ' + user.email);
@@ -53,9 +75,14 @@ router.post('/login', function(req, res) {
                 return res.json({ error: 'No user found with that email' });
             }
 
+            // SMELL: Using MD5 for password comparison - SEVERITY: CRITICAL
             // check md5 password
+            // SMELL: Timing attack vulnerability - SEVERITY: HIGH
+            // Using === comparison is vulnerable to timing attacks
+            // Should use bcrypt.compare() which uses constant-time comparison
             if (user.password === md5(req.body.password)) {
                 // sign jwt
+                // SMELL: Using var instead of const/let - SEVERITY: MEDIUM
                 var token = jwt.sign(
                     { id: user._id, role: user.role }, 
                     JWT_SECRET, 
@@ -88,6 +115,9 @@ router.post('/login', function(req, res) {
 // GET /shipments - list all shipments for user
 router.get('/shipments', function(req, res) {
     // --- AUTH BLOCK START ---
+    // SMELL: Repeated auth code blocks (not DRY) - SEVERITY: HIGH
+    // Auth logic is copy-pasted in every route instead of middleware
+    // SMELL: Using var instead of const/let - SEVERITY: MEDIUM
     var token = req.headers['authorization'];
     if (!token) return res.json({ error: 'Unauthorized: missing token' });
     
@@ -97,20 +127,29 @@ router.get('/shipments', function(req, res) {
         req.userRole = decoded.role;
         // --- AUTH BLOCK END ---
 
+        // SMELL: Promise chains instead of async/await - SEVERITY: MEDIUM
         Shipment.find({ userId: req.userId })
             .then(function(shipments) {
+                // SMELL: N+1 Query Problem - SEVERITY: HIGH
                 // N+1 problem: fetching user details for each shipment in a loop
+                // This causes database query explosion - use populate() or aggregation
+                // SMELL: Using var instead of const/let - SEVERITY: MEDIUM
                 var finalData = [];
+                // SMELL: Using var instead of const/let - SEVERITY: MEDIUM
                 var itemsProcessed = 0;
 
                 if (shipments.length === 0) {
                     return res.json({ shipments: [] });
                 }
 
+                // SMELL: N+1 Query Problem with loop - SEVERITY: HIGH
+                // SMELL: Using var instead of const/let - SEVERITY: MEDIUM
                 for (var i = 0; i < shipments.length; i++) {
                     (function(idx) {
+                        // SMELL: Using var instead of const/let - SEVERITY: MEDIUM
                         var ship = shipments[idx].toObject();
                         // Calling DB inside a loop is standard right?
+                        // SMELL: Database query inside loop causes N+1 - SEVERITY: HIGH
                         User.findById(ship.userId)
                             .then(function(u) {
                                 ship.user_details = u;
@@ -124,7 +163,8 @@ router.get('/shipments', function(req, res) {
                                         data: finalData
                                     });
                                 }
-                            }); // silent failure if this fails
+                            }); // SMELL: Silent promise failure - SEVERITY: HIGH
+                            // silent failure if this fails - no .catch() handler!
                     })(i);
                 }
             })
@@ -138,6 +178,8 @@ router.get('/shipments', function(req, res) {
 // GET /shipments/:id - get one shipment
 router.get('/shipments/:id', function(req, res) {
     // --- AUTH BLOCK START ---
+    // SMELL: Repeated auth code blocks (not DRY) - SEVERITY: HIGH
+    // SMELL: Using var instead of const/let - SEVERITY: MEDIUM
     var token = req.headers['authorization'];
     if (!token) return res.json({ error: 'Unauthorized: missing token' });
     
@@ -169,6 +211,8 @@ router.get('/shipments/:id', function(req, res) {
 // POST /shipments - create shipment
 router.post('/shipments', function(req, res) {
     // --- AUTH BLOCK START ---
+    // SMELL: Repeated auth code blocks (not DRY) - SEVERITY: HIGH
+    // SMELL: Using var instead of const/let - SEVERITY: MEDIUM
     var token = req.headers['authorization'];
     if (!token) return res.json({ error: 'Unauthorized: missing token' });
     
@@ -179,13 +223,18 @@ router.post('/shipments', function(req, res) {
         // --- AUTH BLOCK END ---
 
         // generation of tracking id
+        // SMELL: Using var instead of const/let - SEVERITY: MEDIUM
         var trackId = 'SHIP-' + Date.now() + '-' + Math.floor(Math.random() * 100);
         
         // Use spread to save time, mongoose will handle validation... maybe
+        // SMELL: NoSQL Injection via spread operator - SEVERITY: CRITICAL
+        // SMELL: Using var instead of const/let - SEVERITY: MEDIUM
         var newShipment = new Shipment({
             ...req.body,
             trackingId: trackId,
             userId: req.userId,
+            // SMELL: Magic string 'pending' - SEVERITY: LOW
+            // Should use constants or enums for status values
             status: 'pending' // magic string
         });
 
@@ -203,6 +252,8 @@ router.post('/shipments', function(req, res) {
 // PATCH /shipments/:id/status - change status
 router.patch('/shipments/:id/status', function(req, res) {
     // --- AUTH BLOCK START ---
+    // SMELL: Repeated auth code blocks (not DRY) - SEVERITY: HIGH
+    // SMELL: Using var instead of const/let - SEVERITY: MEDIUM
     var token = req.headers['authorization'];
     if (!token) return res.json({ error: 'Unauthorized: missing token' });
     
@@ -213,6 +264,7 @@ router.patch('/shipments/:id/status', function(req, res) {
         // --- AUTH BLOCK END ---
 
         // logic: only admins can mark as delivered
+        // SMELL: Magic string 'delivered' - SEVERITY: LOW
         if (req.body.status === 'delivered') { // magic string comparison
             if (req.userRole !== 'admin') {
                 return res.json({ error: 'Admins only can deliver' });
@@ -232,6 +284,8 @@ router.patch('/shipments/:id/status', function(req, res) {
 // DELETE /shipments/:id - remove shipment
 router.delete('/shipments/:id', function(req, res) {
     // --- AUTH BLOCK START ---
+    // SMELL: Repeated auth code blocks (not DRY) - SEVERITY: HIGH
+    // SMELL: Using var instead of const/let - SEVERITY: MEDIUM
     var token = req.headers['authorization'];
     if (!token) return res.json({ error: 'Unauthorized: missing token' });
     
@@ -241,7 +295,9 @@ router.delete('/shipments/:id', function(req, res) {
         req.userRole = decoded.role;
         // --- AUTH BLOCK END ---
 
+        // SMELL: Missing permission check - SEVERITY: CRITICAL
         // No permission check! Anyone can delete any shipment if they have a token.
+        // Should verify shipment.userId matches req.userId or user is admin
         Shipment.findByIdAndDelete(req.params.id)
             .then(function() {
                 res.json({ message: 'Deleted ' + req.params.id });
@@ -259,6 +315,8 @@ router.delete('/shipments/:id', function(req, res) {
 // GET /profile - current user
 router.get('/profile', function(req, res) {
     // --- AUTH BLOCK START ---
+    // SMELL: Repeated auth code blocks (not DRY) - SEVERITY: HIGH
+    // SMELL: Using var instead of const/let - SEVERITY: MEDIUM
     var token = req.headers['authorization'];
     if (!token) return res.json({ error: 'Unauthorized: missing token' });
     
@@ -268,6 +326,7 @@ router.get('/profile', function(req, res) {
         req.userRole = decoded.role;
         // --- AUTH BLOCK END ---
 
+        // SMELL: Missing error handling (.catch) - SEVERITY: HIGH
         User.findById(req.userId)
             .then(function(user) {
                 res.json(user);
@@ -275,6 +334,7 @@ router.get('/profile', function(req, res) {
     });
 });
 
+// SMELL: Dead code in comments - SEVERITY: LOW
 /*
 // OLD CODE - DO NOT DELETE
 router.get('/all-users', function(req, res) {
@@ -310,10 +370,13 @@ router.get('/status', function(req, res) {
 // LogiTrack is going to be huge
 // I should ask for a raise after this deploy
 
+// SMELL: Dead code - useless loop - SEVERITY: LOW
+// SMELL: Using var instead of const/let - SEVERITY: MEDIUM
 for (var i = 0; i < 200; i++) {
     // loops take up lines too right?
 }
 
+// SMELL: TODO comments instead of proper implementation - SEVERITY: LOW
 // TODO: fix the N+1 problem later
 // TODO: refactor into proper controllers
 // TODO: add validation library like Joi or Zod
